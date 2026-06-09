@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
-
 const BRANCHES = ['Tý','Sửu','Dần','Mão','Thìn','Tỵ','Ngọ','Mùi','Thân','Dậu','Tuất','Hợi'];
 const PALACE_VI: Record<string,string> = {
   '命宫':'Mệnh','兄弟':'Huynh Đệ','夫妻':'Phu Thê','子女':'Tử Nữ',
@@ -21,17 +19,8 @@ const SIHUA_VI: Record<string,string> = {
   '禄':'Lộc','权':'Quyền','科':'Khoa','忌':'Kỵ'
 };
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://phuongnamtechsol.com',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-export async function OPTIONS(req: NextRequest) {
-  return new NextResponse(null, { 
-    status: 200,   // một số browser không chấp nhận 204
-    headers: corsHeaders 
-  });
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200 });
 }
 
 export async function POST(req: NextRequest) {
@@ -39,7 +28,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { palaces, birthInfo, lunarInfo, wuxingJuName, mingGongBranch, shenGongBranch } = body;
 
-    // Build mô tả lá số
     const palaceDesc = palaces.map((p: any) => {
       const tenCung = PALACE_VI[p.name] || p.name;
       const sao = p.stars.map((s: any) => {
@@ -101,15 +89,12 @@ Trả về JSON (không có text thừa, không có markdown):
     const cleaned = rawText.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleaned);
 
-    return NextResponse.json(
-      { success: true, data: parsed },
-      { headers: corsHeaders }
-    );
+    return NextResponse.json({ success: true, data: parsed });
 
   } catch (e: any) {
     return NextResponse.json(
       { success: false, error: e.message },
-      { status: 500, headers: corsHeaders }
+      { status: 500 }
     );
   }
 }
