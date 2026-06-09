@@ -86,8 +86,18 @@ Trả về JSON (không có text thừa, không có markdown):
 
     const geminiData = await geminiRes.json();
     const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const cleaned = rawText.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+// Extract JSON robust hơn
+let cleaned = rawText.trim();
+// Xóa markdown code block nếu có
+cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+// Tìm JSON object nếu có text thừa xung quanh
+const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+if (!jsonMatch) {
+  throw new Error('Gemini không trả về JSON hợp lệ: ' + cleaned.substring(0, 200));
+}
+const parsed = JSON.parse(jsonMatch[0]);
 
     return NextResponse.json({ success: true, data: parsed });
 
