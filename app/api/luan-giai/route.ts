@@ -55,31 +55,39 @@ THÔNG TIN LÁ SỐ:
 - Thân cung: ${BRANCHES[shenGongBranch]}
 
 CÁC CUNG:
-${palaceDesc}
-
-Trả về JSON hợp lệ (không có text thừa, không có markdown, không có backtick):
-{
-  "tongQuat": "Tổng quát lá số, tính cách bản mệnh (3-4 câu)",
-  "tinhDuyen": "Luận cung Phu Thê, tình duyên hôn nhân (2-3 câu)",
-  "suNghiep": "Luận cung Quan Lộc, công danh sự nghiệp (2-3 câu)",
-  "taiLoc": "Luận cung Tài Bạch, tiền tài vật chất (2-3 câu)",
-  "daiHan": "Luận đại hạn hiện tại và vận hạn gần nhất (2-3 câu)",
-  "cacCung": {
-    "Mệnh": "1-2 câu",
-    "Phu Thê": "1-2 câu",
-    "Quan Lộc": "1-2 câu",
-    "Tài Bạch": "1-2 câu",
-    "Phúc Đức": "1-2 câu",
-    "Thiên Di": "1-2 câu",
-    "Tử Nữ": "1-2 câu",
-    "Tật Ách": "1-2 câu"
-  }
-}`;
+${palaceDesc}`;
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY chưa được cấu hình');
     }
+
+    // Định nghĩa Schema để ép cấu trúc JSON phản hồi từ Gemini
+    const responseSchema = {
+      type: "OBJECT",
+      properties: {
+        tongQuat: { type: "STRING", description: "Tổng quát lá số, tính cách bản mệnh (3-4 câu)" },
+        tinhDuyen: { type: "STRING", description: "Luận cung Phu Thê, tình duyên hôn nhân (2-3 câu)" },
+        suNghiep: { type: "STRING", description: "Luận cung Quan Lộc, công danh sự nghiệp (2-3 câu)" },
+        taiLoc: { type: "STRING", description: "Luận cung Tài Bạch, tiền tài vật chất (2-3 câu)" },
+        daiHan: { type: "STRING", description: "Luận đại hạn hiện tại và vận hạn gần nhất (2-3 câu)" },
+        cacCung: {
+          type: "OBJECT",
+          properties: {
+            "Mệnh": { type: "STRING", description: "Luận đoán cung Mệnh ngắn gọn 1-2 câu" },
+            "Phu Thê": { type: "STRING", description: "Luận đoán cung Phu Thê ngắn gọn 1-2 câu" },
+            "Quan Lộc": { type: "STRING", description: "Luận đoán cung Quan Lộc ngắn gọn 1-2 câu" },
+            "Tài Bạch": { type: "STRING", description: "Luận đoán cung Tài Bạch ngắn gọn 1-2 câu" },
+            "Phúc Đức": { type: "STRING", description: "Luận đoán cung Phúc Đức ngắn gọn 1-2 câu" },
+            "Thiên Di": { type: "STRING", description: "Luận đoán cung Thiên Di ngắn gọn 1-2 câu" },
+            "Tử Nữ": { type: "STRING", description: "Luận đoán cung Tử Nữ ngắn gọn 1-2 câu" },
+            "Tật Ách": { type: "STRING", description: "Luận đoán cung Tật Ách ngắn gọn 1-2 câu" }
+          },
+          required: ["Mệnh", "Phu Thê", "Quan Lộc", "Tài Bạch", "Phúc Đức", "Thiên Di", "Tử Nữ", "Tật Ách"]
+        }
+      },
+      required: ["tongQuat", "tinhDuyen", "suNghiep", "taiLoc", "daiHan", "cacCung"]
+    };
 
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
@@ -88,37 +96,32 @@ Trả về JSON hợp lệ (không có text thừa, không có markdown, không 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+          generationConfig: { 
+            temperature: 0.7, 
+            maxOutputTokens: 2048,
+            responseMimeType: "application/json", // Bắt buộc trả về định dạng JSON
+            responseSchema: responseSchema       // Khớp định dạng với cấu trúc schema ở trên
+          }
         })
       }
     );
 
     const geminiData = await geminiRes.json();
 
-    // Log để debug trên Vercel Logs
     console.log('Gemini status:', geminiRes.status);
-    console.log('Gemini response:', JSON.stringify(geminiData).substring(0, 500));
 
     if (!geminiRes.ok) {
       throw new Error(`Gemini API lỗi ${geminiRes.status}: ${JSON.stringify(geminiData)}`);
     }
 
-    const rawText: string = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!rawText) {
-      throw new Error('Gemini không trả về nội dung. Response: ' + JSON.stringify(geminiData).substring(0, 300));
+      throw new Error('Gemini không trả về nội dung.');
     }
 
-    // Parse JSON - xử lý cả trường hợp có markdown wrapper
-    let cleaned = rawText.trim();
-    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Không tìm thấy JSON trong response: ' + cleaned.substring(0, 200));
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    // Lúc này dữ liệu chắc chắn là một chuỗi JSON thuần túy, có thể parse trực tiếp một cách an toàn
+    const parsed = JSON.parse(rawText.trim());
 
     return NextResponse.json({ success: true, data: parsed });
 
