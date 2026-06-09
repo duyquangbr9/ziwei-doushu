@@ -85,9 +85,7 @@ Trả về JSON (không có text thừa, không có markdown):
     );
 
     const geminiData = await geminiRes.json();
-    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
+    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';    
 // Extract JSON robust hơn
 let cleaned = rawText.trim();
 // Xóa markdown code block nếu có
