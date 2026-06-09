@@ -76,30 +76,37 @@ Trả về JSON hợp lệ (không có text thừa, không có markdown, không 
   }
 }`;
 
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    const anthropicData = await anthropicRes.json();
-
-    if (!anthropicRes.ok) {
-      throw new Error(`Anthropic API lỗi ${anthropicRes.status}: ${JSON.stringify(anthropicData)}`);
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error('GEMINI_API_KEY chưa được cấu hình');
     }
 
-    const rawText: string = anthropicData.content?.[0]?.text || '';
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+        })
+      }
+    );
+
+    const geminiData = await geminiRes.json();
+
+    // Log để debug trên Vercel Logs
+    console.log('Gemini status:', geminiRes.status);
+    console.log('Gemini response:', JSON.stringify(geminiData).substring(0, 500));
+
+    if (!geminiRes.ok) {
+      throw new Error(`Gemini API lỗi ${geminiRes.status}: ${JSON.stringify(geminiData)}`);
+    }
+
+    const rawText: string = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     if (!rawText) {
-      throw new Error('API không trả về nội dung');
+      throw new Error('Gemini không trả về nội dung. Response: ' + JSON.stringify(geminiData).substring(0, 300));
     }
 
     // Parse JSON - xử lý cả trường hợp có markdown wrapper
