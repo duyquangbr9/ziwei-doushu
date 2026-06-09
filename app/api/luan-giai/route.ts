@@ -22,13 +22,16 @@ const SIHUA_VI: Record<string,string> = {
 };
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+  'Access-Control-Allow-Origin': https://phuongnamtechsol.com,
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: corsHeaders });
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, { 
+    status: 200,   // một số browser không chấp nhận 204
+    headers: corsHeaders 
+  });
 }
 
 export async function POST(req: NextRequest) {
