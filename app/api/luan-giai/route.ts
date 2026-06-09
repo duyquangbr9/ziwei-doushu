@@ -28,17 +28,21 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { palaces, birthInfo, lunarInfo, wuxingJuName, mingGongBranch, shenGongBranch } = body;
 
+    if (!palaces || !birthInfo || !lunarInfo) {
+      return NextResponse.json({ success: false, error: 'Thiếu dữ liệu đầu vào' }, { status: 400 });
+    }
+
     const palaceDesc = palaces.map((p: any) => {
       const tenCung = PALACE_VI[p.name] || p.name;
       const sao = p.stars.map((s: any) => {
         const ten = STAR_VI[s.name] || s.name;
-        const sihua = s.siHua ? `[${SIHUA_VI[s.siHua]||s.siHua}]` : '';
+        const sihua = s.siHua ? `[${SIHUA_VI[s.siHua] || s.siHua}]` : '';
         return `${ten}${sihua}`;
       }).join(', ');
       const dx = p.daXianAge ? ` | Đại hạn: ${p.daXianAge[0]}-${p.daXianAge[1]}` : '';
       const isMing = p.branch === mingGongBranch ? ' [CUNG MỆNH]' : '';
       const isShen = p.branch === shenGongBranch ? ' [THÂN CUNG]' : '';
-      return `- Cung ${tenCung} (${BRANCHES[p.branch]})${isMing}${isShen}${dx}: ${sao||'không có sao chính'}`;
+      return `- Cung ${tenCung} (${BRANCHES[p.branch]})${isMing}${isShen}${dx}: ${sao || 'không có sao chính'}`;
     }).join('\n');
 
     const prompt = `Bạn là chuyên gia Tử Vi Đẩu Số có 30 năm kinh nghiệm. Luận giải lá số sau bằng tiếng Việt, ngắn gọn nhưng sâu sắc.
@@ -53,7 +57,7 @@ THÔNG TIN LÁ SỐ:
 CÁC CUNG:
 ${palaceDesc}
 
-Trả về JSON (không có text thừa, không có markdown):
+Trả về JSON hợp lệ (không có text thừa, không có markdown, không có backtick):
 {
   "tongQuat": "Tổng quát lá số, tính cách bản mệnh (3-4 câu)",
   "tinhDuyen": "Luận cung Phu Thê, tình duyên hôn nhân (2-3 câu)",
@@ -72,34 +76,47 @@ Trả về JSON (không có text thừa, không có markdown):
   }
 }`;
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
-        })
-      }
-    );
+    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
 
-    const geminiData = await geminiRes.json();
-    const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';    
-// Extract JSON robust hơn
-let cleaned = rawText.trim();
-// Xóa markdown code block nếu có
-cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-// Tìm JSON object nếu có text thừa xung quanh
-const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-if (!jsonMatch) {
-  throw new Error('Gemini không trả về JSON hợp lệ: ' + cleaned.substring(0, 200));
-}
-const parsed = JSON.parse(jsonMatch[0]);
+    const anthropicData = await anthropicRes.json();
+
+    if (!anthropicRes.ok) {
+      throw new Error(`Anthropic API lỗi ${anthropicRes.status}: ${JSON.stringify(anthropicData)}`);
+    }
+
+    const rawText: string = anthropicData.content?.[0]?.text || '';
+
+    if (!rawText) {
+      throw new Error('API không trả về nội dung');
+    }
+
+    // Parse JSON - xử lý cả trường hợp có markdown wrapper
+    let cleaned = rawText.trim();
+    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Không tìm thấy JSON trong response: ' + cleaned.substring(0, 200));
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
 
     return NextResponse.json({ success: true, data: parsed });
 
   } catch (e: any) {
+    console.error('luan-giai error:', e.message);
     return NextResponse.json(
       { success: false, error: e.message },
       { status: 500 }
