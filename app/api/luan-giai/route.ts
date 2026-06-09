@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    headers: {
+      'Access-Control-Allow-Origin': 'https://phuongnamtechsol.com',
+      'Access-Control-Allow-Methods': 'POST',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    }
+  });
+}
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { palaces, birthInfo, lunarInfo, wuxingJuName, mingGongBranch, shenGongBranch } = body;
