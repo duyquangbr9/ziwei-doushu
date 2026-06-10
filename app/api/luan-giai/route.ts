@@ -89,7 +89,8 @@ Trả về JSON với cấu trúc sau (KHÔNG có text ngoài JSON):
       throw new Error('ANTHROPIC_API_KEY chưa được cấu hình');
     }
 
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+    // --- ĐÃ THAY ĐỔI URL SANG SHOPAIKEY ENDPOINT ---
+    const claudeRes = await fetch('https://api.shopaikey.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -97,7 +98,8 @@ Trả về JSON với cấu trúc sau (KHÔNG có text ngoài JSON):
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        // --- ĐÃ ĐỔI SANG MODEL CHUẨN ĐÚNG FORMAT CỦA ANTHROPIC ---
+        model: 'claude-3-5-sonnet-20241022', 
         max_tokens: 2048,
         system: 'Bạn là chuyên gia Tử Vi Đẩu Số có 30 năm kinh nghiệm. Chỉ trả về JSON thuần túy, không có markdown, không có ```json, không có text ngoài JSON.',
         messages: [
