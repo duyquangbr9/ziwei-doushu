@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       return `- Cung ${tenCung} (${BRANCHES[p.branch]})${isMing}${isShen}${dx}: ${sao || 'không có sao chính'}`;
     }).join('\n');
 
-    const prompt = `Bạn là chuyên gia Tử Vi Đẩu Số có 30 năm kinh nghiệm. Luận giải lá số sau bằng tiếng Việt, ngắn gọn nhưng sâu sắc.
+    const userPrompt = `Luận giải lá số Tử Vi sau bằng tiếng Việt, ngắn gọn nhưng sâu sắc.
 
 THÔNG TIN LÁ SỐ:
 - Dương lịch: ${birthInfo.year}/${birthInfo.month}/${birthInfo.day}
@@ -63,93 +63,82 @@ THÔNG TIN LÁ SỐ:
 - Thân cung: ${BRANCHES[shenGongBranch]}
 
 CÁC CUNG:
-${palaceDesc}`;
+${palaceDesc}
 
-    const apiKey = process.env.GEMINI_API_KEY;
+Trả về JSON với cấu trúc sau (KHÔNG có text ngoài JSON):
+{
+  "tongQuat": "Tổng quát lá số, tính cách bản mệnh (3-4 câu)",
+  "tinhDuyen": "Luận cung Phu Thê, tình duyên hôn nhân (2-3 câu)",
+  "suNghiep": "Luận cung Quan Lộc, công danh sự nghiệp (2-3 câu)",
+  "taiLoc": "Luận cung Tài Bạch, tiền tài vật chất (2-3 câu)",
+  "daiHan": "Luận đại hạn hiện tại và vận hạn gần nhất (2-3 câu)",
+  "cacCung": {
+    "Mệnh": "Luận đoán cung Mệnh",
+    "Phu Thê": "Luận đoán cung Phu Thê",
+    "Quan Lộc": "Luận đoán cung Quan Lộc",
+    "Tài Bạch": "Luận đoán cung Tài Bạch",
+    "Phúc Đức": "Luận đoán cung Phúc Đức",
+    "Thiên Di": "Luận đoán cung Thiên Di",
+    "Tử Nữ": "Luận đoán cung Tử Nữ",
+    "Tật Ách": "Luận đoán cung Tật Ách"
+  }
+}`;
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      throw new Error('GEMINI_API_KEY chưa được cấu hình');
+      throw new Error('ANTHROPIC_API_KEY chưa được cấu hình');
     }
 
-    // THAY ĐỔI QUAN TRỌNG: Dùng Key Tiếng Anh không dấu để Schema chạy mượt 100% trên Gemini Free
-    const responseSchema = {
-      type: "OBJECT",
-      properties: {
-        tongQuat: { type: "STRING", description: "Tổng quát lá số, tính cách bản mệnh bằng tiếng Việt (3-4 câu)" },
-        tinhDuyen: { type: "STRING", description: "Luận cung Phu Thê, tình duyên hôn nhân bằng tiếng Việt (2-3 câu)" },
-        suNghiep: { type: "STRING", description: "Luận cung Quan Lộc, công danh sự nghiệp bằng tiếng Việt (2-3 câu)" },
-        taiLoc: { type: "STRING", description: "Luận cung Tài Bạch, tiền tài vật chất bằng tiếng Việt (2-3 câu)" },
-        daiHan: { type: "STRING", description: "Luận đại hạn hiện tại và vận hạn gần nhất bằng tiếng Việt (2-3 câu)" },
-        cacCung: {
-          type: "OBJECT",
-          properties: {
-            menh: { type: "STRING", description: "Luận đoán cung Mệnh bằng tiếng Việt" },
-            phuThe: { type: "STRING", description: "Luận đoán cung Phu Thê bằng tiếng Việt" },
-            quanLoc: { type: "STRING", description: "Luận đoán cung Quan Lộc bằng tiếng Việt" },
-            taiBach: { type: "STRING", description: "Luận đoán cung Tài Bạch bằng tiếng Việt" },
-            phucDuc: { type: "STRING", description: "Luận đoán cung Phúc Đức bằng tiếng Việt" },
-            thienDi: { type: "STRING", description: "Luận đoán cung Thiên Di bằng tiếng Việt" },
-            tuNu: { type: "STRING", description: "Luận đoán cung Tử Nữ bằng tiếng Việt" },
-            tatAch: { type: "STRING", description: "Luận đoán cung Tật Ách bằng tiếng Việt" }
-          },
-          required: ["menh", "phuThe", "quanLoc", "taiBach", "phucDuc", "thienDi", "tuNu", "tatAch"]
-        }
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
       },
-      required: ["tongQuat", "tinhDuyen", "suNghiep", "taiLoc", "daiHan", "cacCung"]
-    };
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        system: 'Bạn là chuyên gia Tử Vi Đẩu Số có 30 năm kinh nghiệm. Chỉ trả về JSON thuần túy, không có markdown, không có ```json, không có text ngoài JSON.',
+        messages: [
+          { role: 'user', content: userPrompt }
+        ],
+      }),
+    });
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { 
-            temperature: 0.7, 
-            maxOutputTokens: 2048,
-            responseMimeType: "application/json",
-            responseSchema: responseSchema 
-          }
-        })
-      }
-    );
+    const claudeData = await claudeRes.json();
+    console.log('Claude Status:', claudeRes.status);
 
-    const geminiData = await geminiRes.json();
-    console.log('Gemini Status:', geminiRes.status);
-
-    if (!geminiRes.ok) {
-      throw new Error(`Gemini API lỗi ${geminiRes.status}: ${geminiData.error?.message || JSON.stringify(geminiData)}`);
+    if (!claudeRes.ok) {
+      throw new Error(`Claude API lỗi ${claudeRes.status}: ${claudeData.error?.message || JSON.stringify(claudeData)}`);
     }
 
-    const candidate = geminiData.candidates?.[0];
-    if (candidate?.finishReason === 'SAFETY') {
-      throw new Error('Nội dung bị bộ lọc an toàn chặn.');
-    }
-
-    const rawText = candidate?.content?.parts?.[0]?.text;
+    const rawText = claudeData.content?.[0]?.text;
     if (!rawText) {
       throw new Error('Mô hình không trả về dữ liệu.');
     }
 
-    const parsed = JSON.parse(rawText.trim());
+    // Xử lý trường hợp Claude vẫn wrap bằng ```json ... ```
+    const cleaned = rawText.trim().replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed = JSON.parse(cleaned);
 
-    // MAP LẠI KEY TIẾNG VIỆT để tương thích hoàn toàn với giao diện Front-end cũ của bạn
+    // Đảm bảo cacCung có đủ key, fallback về chuỗi rỗng nếu thiếu
     const finalResult = {
-      tongQuat: parsed.tongQuat,
-      tinhDuyen: parsed.tinhDuyen,
-      suNghiep: parsed.suNghiep,
-      taiLoc: parsed.taiLoc,
-      daiHan: parsed.daiHan,
+      tongQuat: parsed.tongQuat || '',
+      tinhDuyen: parsed.tinhDuyen || '',
+      suNghiep: parsed.suNghiep || '',
+      taiLoc: parsed.taiLoc || '',
+      daiHan: parsed.daiHan || '',
       cacCung: {
-        "Mệnh": parsed.cacCung?.menh || "",
-        "Phu Thê": parsed.cacCung?.phuThe || "",
-        "Quan Lộc": parsed.cacCung?.quanLoc || "",
-        "Tài Bạch": parsed.cacCung?.taiBach || "",
-        "Phúc Đức": parsed.cacCung?.phucDuc || "",
-        "Thiên Di": parsed.cacCung?.thienDi || "",
-        "Tử Nữ": parsed.cacCung?.tuNu || "",
-        "Tật Ách": parsed.cacCung?.tatAch || ""
-      }
+        'Mệnh':     parsed.cacCung?.['Mệnh']     || '',
+        'Phu Thê':  parsed.cacCung?.['Phu Thê']  || '',
+        'Quan Lộc': parsed.cacCung?.['Quan Lộc'] || '',
+        'Tài Bạch': parsed.cacCung?.['Tài Bạch'] || '',
+        'Phúc Đức': parsed.cacCung?.['Phúc Đức'] || '',
+        'Thiên Di': parsed.cacCung?.['Thiên Di'] || '',
+        'Tử Nữ':   parsed.cacCung?.['Tử Nữ']   || '',
+        'Tật Ách':  parsed.cacCung?.['Tật Ách']  || '',
+      },
     };
 
     return NextResponse.json({ success: true, data: finalResult });
